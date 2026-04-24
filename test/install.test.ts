@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawn } from "node:child_process";
 
 import { install } from "../src/install.js";
 import { uninstall } from "../src/uninstall.js";
@@ -134,6 +141,64 @@ describe("install", () => {
     expect(cfg.mcpServers.a2h.env).toEqual({
       A2H_API_BASE: "https://api-staging.example",
     });
+  });
+
+  it("re-upserts a2h entry when apiBase changes on a re-install", async () => {
+    const mcpPath = join(process.env.HOME!, ".claude.json");
+    // First install points at prod (no env).
+    await install({ login: false });
+    let cfg = JSON.parse(readFileSync(mcpPath, "utf-8"));
+    expect(cfg.mcpServers.a2h.env).toBeUndefined();
+
+    // Second install with --api-base must update the entry, not skip it.
+    await install({ login: false, apiBase: "https://api-staging.example" });
+    cfg = JSON.parse(readFileSync(mcpPath, "utf-8"));
+    expect(cfg.mcpServers.a2h.env).toEqual({
+      A2H_API_BASE: "https://api-staging.example",
+    });
+  });
+
+  it("spawns login with the -p @a2hmarket/a2h-mcp a2h-mcp-login bin form", async () => {
+    const spawnMock = vi.mocked(spawn);
+    spawnMock.mockClear();
+    await install({ login: true });
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    expect(spawnMock).toHaveBeenCalledWith(
+      "npx",
+      ["-y", "-p", "@a2hmarket/a2h-mcp", "a2h-mcp-login"],
+      expect.objectContaining({ stdio: "inherit" }),
+    );
+  });
+
+  it("runs login on re-install when credentials are still missing", async () => {
+    // First run: writes config, but we simulate login failing silently by
+    // running --no-login (equivalent outcome: no credentials on disk).
+    await install({ login: false });
+
+    const spawnMock = vi.mocked(spawn);
+    spawnMock.mockClear();
+
+    // Second run with login=true. Old behaviour: hasServer → skip login.
+    // New behaviour: config is present but creds missing → still log in.
+    await install({ login: true });
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips login on re-install when credentials already exist", async () => {
+    await install({ login: false });
+
+    // Plant a credentials file under A2H_HOME.
+    mkdirSync(process.env.A2H_HOME!, { recursive: true });
+    writeFileSync(
+      join(process.env.A2H_HOME!, "credentials.json"),
+      JSON.stringify({ tokenName: "test", agentId: "ag_test" }),
+    );
+
+    const spawnMock = vi.mocked(spawn);
+    spawnMock.mockClear();
+
+    await install({ login: true });
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 });
 

@@ -1,4 +1,12 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  unlinkSync,
+} from "node:fs";
+import { randomBytes } from "node:crypto";
 import { dirname } from "node:path";
 
 export interface McpServerEntry {
@@ -69,8 +77,25 @@ export function removeServer(
   return { ...cfg, mcpServers: next };
 }
 
-/** Pretty-print to disk, creating parent dirs as needed. */
+/**
+ * Pretty-print to disk atomically — write to a sibling temp file, then rename
+ * over the target. Prevents Ctrl-C / OOM mid-write from truncating the user's
+ * entire `.claude.json` (which holds projects/auth/tips, not just our entry).
+ */
 export function writeMcpConfig(path: string, cfg: McpConfigFile): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(cfg, null, 2) + "\n");
+  const tmp = `${path}.tmp.${randomBytes(6).toString("hex")}`;
+  try {
+    writeFileSync(tmp, JSON.stringify(cfg, null, 2) + "\n");
+    renameSync(tmp, path);
+  } catch (e) {
+    // Best-effort cleanup. If the temp file never materialized the unlink will
+    // itself throw — swallow that so the caller sees the original error.
+    try {
+      if (existsSync(tmp)) unlinkSync(tmp);
+    } catch {
+      /* ignore */
+    }
+    throw e;
+  }
 }

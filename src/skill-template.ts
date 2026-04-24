@@ -25,7 +25,7 @@ description: Use this skill when the user mentions A2H Market, asks to contact t
 
 若 MCP server 首次启动未登录，它只暴露一个 \`login\` 工具。引导用户：
 \`\`\`
-npx -y @a2hmarket/a2h-mcp login
+npx -y -p @a2hmarket/a2h-mcp a2h-mcp-login
 \`\`\`
 然后重启 CC，skill 会自动就绪。
 
@@ -38,5 +38,5 @@ npx -y @a2hmarket/a2h-mcp login
 ## 故障排查
 
 - "A2H MCP server 连不上" → 让用户跑 \`npx -y @a2hmarket/a2h-skill-lite status\` 看诊断
-- "tool 返回 401" → credentials 失效，\`npx -y @a2hmarket/a2h-mcp login\` 重登
+- "tool 返回 401" → credentials 失效，\`npx -y -p @a2hmarket/a2h-mcp a2h-mcp-login\` 重登
 `;

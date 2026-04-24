@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { detectPlatform, resolveConfig } from "./detect-platform.js";
@@ -11,6 +12,17 @@ import {
   type McpServerEntry,
 } from "./mcp-config.js";
 import { SKILL_MARKDOWN, SKILL_NAME } from "./skill-template.js";
+
+/** Resolve credentials.json path, honoring A2H_HOME override. */
+function credentialsPath(): string {
+  const base = process.env.A2H_HOME || join(homedir(), ".a2h");
+  return join(base, "credentials.json");
+}
+
+/** True if a credentials file already exists (we don't validate contents). */
+function hasCredentials(): boolean {
+  return existsSync(credentialsPath());
+}
 
 export interface InstallOptions {
   /** When false, skip the `a2h-mcp login` child process. Default: true. */
@@ -50,10 +62,15 @@ export async function install(opts: InstallOptions = {}): Promise<void> {
   process.stderr.write(`Detected platform: ${platform}\n`);
   process.stderr.write(`MCP config: ${cfg.mcpConfigPath}\n`);
 
-  // 1. MCP server config (idempotent).
+  // 1. MCP server config (idempotent, but re-upsert when apiBase changes).
   const existing = readMcpConfig(cfg.mcpConfigPath);
-  if (hasServer(existing, "a2h")) {
-    process.stderr.write(`a2h MCP server already configured, skipping.\n`);
+  const existingEntry = existing.mcpServers?.a2h;
+  const existingApiBase = existingEntry?.env?.A2H_API_BASE;
+  const apiBaseChanged =
+    opts.apiBase !== undefined && opts.apiBase !== existingApiBase;
+
+  if (hasServer(existing, "a2h") && !apiBaseChanged) {
+    process.stderr.write(`✓ a2h MCP server already configured\n`);
   } else {
     const entry: McpServerEntry = {
       command: "npx",
@@ -62,7 +79,13 @@ export async function install(opts: InstallOptions = {}): Promise<void> {
     };
     const next = upsertServer(existing, "a2h", entry);
     writeMcpConfig(cfg.mcpConfigPath, next);
-    process.stderr.write(`Wrote ${cfg.mcpConfigPath}\n`);
+    if (apiBaseChanged && hasServer(existing, "a2h")) {
+      process.stderr.write(
+        `Updated a2h entry (A2H_API_BASE → ${opts.apiBase})\n`,
+      );
+    } else {
+      process.stderr.write(`Wrote ${cfg.mcpConfigPath}\n`);
+    }
   }
 
   // 2. Skill markdown (CC only for now).
@@ -77,19 +100,34 @@ export async function install(opts: InstallOptions = {}): Promise<void> {
     );
   }
 
-  // 3. Next-step guidance.
+  // 3. Login, independently gated from config presence. The old behaviour
+  // skipped login whenever the config already existed, so a user whose first
+  // install failed at login would stay logged-out forever on re-runs.
   const doLogin = opts.login !== false;
   process.stderr.write(`\nInstallation complete.\n`);
-  process.stderr.write(
-    doLogin
-      ? `\nNext step: starting login flow...\n`
-      : `\nNext step: restart your agent and run:\n   npx -y @a2hmarket/a2h-mcp login\n`,
-  );
 
   if (doLogin) {
-    await runLogin(opts.apiBase);
+    if (hasCredentials()) {
+      process.stderr.write(`✓ already logged in (${credentialsPath()})\n`);
+    } else {
+      process.stderr.write(`\nNext step: starting login flow...\n`);
+      try {
+        await runLogin(opts.apiBase);
+      } catch (e) {
+        process.stderr.write(
+          `\nLogin failed: ${(e as Error).message}\n` +
+            `You can retry manually with:\n` +
+            `   npx -y -p @a2hmarket/a2h-mcp a2h-mcp-login\n`,
+        );
+        throw e;
+      }
+    }
     process.stderr.write(
       `\nNow restart your agent (${cfg.restartCommand}) to activate the skill.\n`,
+    );
+  } else {
+    process.stderr.write(
+      `\nNext step: restart your agent and run:\n   npx -y -p @a2hmarket/a2h-mcp a2h-mcp-login\n`,
     );
   }
 }

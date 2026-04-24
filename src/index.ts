@@ -20,8 +20,17 @@ async function main(): Promise<void> {
   const cmd = args[0];
 
   const apiBaseIdx = args.indexOf("--api-base");
-  const apiBase =
-    apiBaseIdx !== -1 && args[apiBaseIdx + 1] ? args[apiBaseIdx + 1] : undefined;
+  let apiBase: string | undefined;
+  if (apiBaseIdx !== -1) {
+    const val = args[apiBaseIdx + 1];
+    if (!val || val.startsWith("--")) {
+      process.stderr.write(
+        "Error: --api-base requires a URL argument\n",
+      );
+      process.exit(1);
+    }
+    apiBase = val;
+  }
   const noLogin = args.includes("--no-login");
 
   switch (cmd) {

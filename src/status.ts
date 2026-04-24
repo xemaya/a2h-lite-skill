@@ -6,33 +6,32 @@ import { detectPlatform, resolveConfig } from "./detect-platform.js";
 import { hasServer, readMcpConfig } from "./mcp-config.js";
 import { SKILL_NAME } from "./skill-template.js";
 
-/** Print a quick diagnostic snapshot of the local install to stderr. */
+/**
+ * Print a diagnostic snapshot of the local install. Writes to stdout (not
+ * stderr) so callers can pipe the output to `tee` / redirect to a file.
+ */
 export function status(): void {
   const platform = detectPlatform();
   const cfg = resolveConfig(platform);
 
-  process.stderr.write(`Platform: ${platform}\n`);
-  process.stderr.write(
-    `MCP config path: ${cfg.mcpConfigPath || "(unknown)"}\n`,
-  );
+  console.log(`Platform: ${platform}`);
+  console.log(`MCP config path: ${cfg.mcpConfigPath || "(unknown)"}`);
 
   if (cfg.mcpConfigPath) {
     try {
       const mcp = readMcpConfig(cfg.mcpConfigPath);
-      process.stderr.write(
-        `MCP server "a2h" configured: ${hasServer(mcp, "a2h") ? "yes" : "no"}\n`,
+      console.log(
+        `MCP server "a2h" configured: ${hasServer(mcp, "a2h") ? "yes" : "no"}`,
       );
     } catch (e) {
-      process.stderr.write(
-        `MCP config unreadable: ${(e as Error).message}\n`,
-      );
+      console.log(`MCP config unreadable: ${(e as Error).message}`);
     }
   }
 
   if (cfg.skillsDir) {
     const skillPath = join(cfg.skillsDir, `${SKILL_NAME}.md`);
-    process.stderr.write(
-      `Skill file: ${existsSync(skillPath) ? `yes (${skillPath})` : "no (not installed)"}\n`,
+    console.log(
+      `Skill file: ${existsSync(skillPath) ? `yes (${skillPath})` : "no (not installed)"}`,
     );
   }
 
@@ -42,15 +41,15 @@ export function status(): void {
   if (existsSync(credPath)) {
     try {
       const creds = JSON.parse(readFileSync(credPath, "utf-8"));
-      process.stderr.write(
-        `Credentials: yes (${creds.tokenName ?? "(anonymous)"} agentId=${creds.agentId ?? "?"})\n`,
+      console.log(
+        `Credentials: yes (${creds.tokenName ?? "(anonymous)"} agentId=${creds.agentId ?? "?"})`,
       );
     } catch {
-      process.stderr.write(`Credentials: file exists but is corrupted\n`);
+      console.log(`Credentials: file exists but is corrupted`);
     }
   } else {
-    process.stderr.write(
-      `Credentials: not logged in. Run: npx -y @a2hmarket/a2h-mcp login\n`,
+    console.log(
+      `Credentials: not logged in. Run: npx -y -p @a2hmarket/a2h-mcp a2h-mcp-login`,
     );
   }
 }

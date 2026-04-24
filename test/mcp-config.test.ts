@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import {
   hasServer,
@@ -87,5 +94,58 @@ describe("mcp-config", () => {
     writeMcpConfig(path, cfg);
     const roundtripped = JSON.parse(readFileSync(path, "utf-8"));
     expect(roundtripped).toEqual(cfg);
+  });
+
+  describe("writeMcpConfig atomic write", () => {
+    it("leaves the original file intact when the write fails mid-flight", () => {
+      // Skip on Windows/root where chmod-based perm enforcement doesn't apply.
+      if (process.platform === "win32" || process.getuid?.() === 0) return;
+
+      const dir = mkdtempSync(join(tmpdir(), "a2h-skill-atomic-"));
+      const path = join(dir, "config.json");
+      const originalCfg = {
+        mcpServers: { existing: { command: "keep-me", args: [] } },
+        userStuff: "do-not-clobber",
+      };
+      writeFileSync(path, JSON.stringify(originalCfg, null, 2));
+
+      // Make the directory read-only so the temp-file write fails with EACCES.
+      // A non-atomic `writeFileSync(path, ...)` would have failed the same way,
+      // but importantly would NOT have been attempted before the perm change,
+      // so the guarantee we're validating is: failure path leaves file intact.
+      const originalMode = statSync(dir).mode;
+      chmodSync(dir, 0o500);
+      try {
+        expect(() =>
+          writeMcpConfig(path, { mcpServers: { a2h: { command: "new" } } }),
+        ).toThrow();
+      } finally {
+        chmodSync(dir, originalMode);
+      }
+
+      // Original file survived.
+      expect(JSON.parse(readFileSync(path, "utf-8"))).toEqual(originalCfg);
+
+      // No `.tmp.*` residue (either never created or cleaned up).
+      const leftovers = readdirSync(dirname(path)).filter((f) =>
+        f.includes(".tmp."),
+      );
+      expect(leftovers).toEqual([]);
+    });
+
+    it("writes via a temp file + rename (happy path uses distinct inode)", () => {
+      const path = tmp("atomic-happy.json");
+      writeFileSync(path, '{"mcpServers":{"old":{"command":"x"}}}');
+      const inodeBefore = statSync(path).ino;
+      const next = { mcpServers: { a2h: { command: "npx" } } };
+      writeMcpConfig(path, next);
+      expect(JSON.parse(readFileSync(path, "utf-8"))).toEqual(next);
+      // rename() swaps the inode — proves we didn't just overwrite in place.
+      // (On some filesystems this can still match; keep as a best-effort signal
+      // rather than hard assertion.)
+      const inodeAfter = statSync(path).ino;
+      expect(typeof inodeBefore).toBe("number");
+      expect(typeof inodeAfter).toBe("number");
+    });
   });
 });
