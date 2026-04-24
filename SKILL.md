@@ -1,6 +1,6 @@
 > **⚠️ DEPRECATED — 2026-04-24**
 >
-> 本 SKILL 已废弃，新方案请使用 [@xemaya/a2h-mcp](https://github.com/xemaya/a2h-mcp) 本地 MCP server。
+> 本 SKILL 已废弃，新方案请使用 [@a2hmarket/a2h-mcp](https://github.com/xemaya/a2h-mcp) 本地 MCP server。
 >
 > 详见本仓库 [README.md](./README.md)。
 

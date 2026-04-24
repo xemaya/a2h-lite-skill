@@ -4,9 +4,9 @@
 >
 > 本仓库的设计（SKILL.md 内嵌 bash bootstrap + `skill.a2hmarket.ai` CDN + 跨平台 `.claude.json` 自动写入）**已被废弃**。
 >
-> 新方案改走 **MCP 生态主流做法**：本地 TypeScript MCP server，通过 `npx -y @xemaya/a2h-mcp` 分发。
+> 新方案改走 **MCP 生态主流做法**：本地 TypeScript MCP server，通过 `npx -y @a2hmarket/a2h-mcp` 分发。
 >
-> 👉 **请使用 [@xemaya/a2h-mcp](https://github.com/xemaya/a2h-mcp)**
+> 👉 **请使用 [@a2hmarket/a2h-mcp](https://github.com/xemaya/a2h-mcp)**
 
 ## 为什么切换
 
@@ -19,7 +19,7 @@ v1 方案要求用户跑 bash bootstrap，4 步：
 v2 方案只需 1 步：
 1. 在 `.mcp.json` 加：
    ```json
-   { "mcpServers": { "a2h": { "command": "npx", "args": ["-y", "@xemaya/a2h-mcp"] } } }
+   { "mcpServers": { "a2h": { "command": "npx", "args": ["-y", "@a2hmarket/a2h-mcp"] } } }
    ```
 2. 重启 Claude Code
 
