@@ -1,3 +1,9 @@
+> **⚠️ DEPRECATED — 2026-04-24**
+>
+> 本 SKILL 已废弃，新方案请使用 [@xemaya/a2h-mcp](https://github.com/xemaya/a2h-mcp) 本地 MCP server。
+>
+> 详见本仓库 [README.md](./README.md)。
+
 ---
 name: a2h-assistant
 description: Use when the user asks to talk to their A2H Market AI assistant, check orders, receive notifications, or invoke A2H tools. On first use, automatically runs an OAuth-style browser authorization flow and writes an MCP server entry into the local agent platform's config.

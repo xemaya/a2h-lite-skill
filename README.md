@@ -1,120 +1,39 @@
-# a2h-lite-skill
+# a2h-lite-skill（已废弃）
 
-A portable **agent skill** that connects Claude Code / Openclaw / Hermes (and any other agent
-runtime able to execute `bash`) to the [A2H Market](https://a2hmarket.ai) AI assistant over MCP
-(Model Context Protocol).
+> **⚠️ DEPRECATED — 2026-04-24**
+>
+> 本仓库的设计（SKILL.md 内嵌 bash bootstrap + `skill.a2hmarket.ai` CDN + 跨平台 `.claude.json` 自动写入）**已被废弃**。
+>
+> 新方案改走 **MCP 生态主流做法**：本地 TypeScript MCP server，通过 `npx -y @xemaya/a2h-mcp` 分发。
+>
+> 👉 **请使用 [@xemaya/a2h-mcp](https://github.com/xemaya/a2h-mcp)**
 
-This is the **Phase 1 "lite" version**: the skill ships a shell bootstrap
-(`scripts/bootstrap.sh`) that performs an OAuth-style device flow, stores a
-Personal Access Token (PAT), and writes the MCP server config into the current
-agent platform's config file.
+## 为什么切换
 
-## Design intent — why bash bootstrap, not OAuth 2.1 auto-discovery
+v1 方案要求用户跑 bash bootstrap，4 步：
+1. 把 skill.md 放进 agent 平台
+2. agent 执行 `bash <(curl -fsSL skill.a2hmarket.ai/bootstrap.sh)`
+3. 浏览器授权
+4. `claude mcp restart a2h`
 
-MCP 2025-06-18 defines an OAuth 2.1 + PKCE auto-discovery flow (the server
-returns 401 + `WWW-Authenticate`, the MCP client kicks off a PKCE flow
-transparently).  CC supports it today, **Openclaw / Hermes coverage is
-inconsistent**, and we want a single onboarding path that works on all three.
+v2 方案只需 1 步：
+1. 在 `.mcp.json` 加：
+   ```json
+   { "mcpServers": { "a2h": { "command": "npx", "args": ["-y", "@xemaya/a2h-mcp"] } } }
+   ```
+2. 重启 Claude Code
 
-The common lowest denominator every modern agent runtime already provides is
-"execute `bash`".  So we chose:
+首次在 agent 里让它调 `login` tool 即可完成授权。完全对齐 Supabase / Linear / Filesystem 等主流 MCP server 的安装方式。
 
-1. `SKILL.md` instructs the agent: if `~/.a2h/credentials.json` is missing,
-   run `bash <(curl -fsSL https://skill.a2hmarket.ai/bootstrap.sh)`.
-2. `bootstrap.sh` calls `POST /mcp/bind/start`, opens a browser, polls for
-   READY, persists the PAT at `~/.a2h/credentials.json`, and writes the MCP
-   server entry into the platform-specific config (`~/.claude.json`,
-   `~/.openclaw/mcp.json`, ...).
-3. The script's final line is `OK_RESTART <platform> <restart-command>`; the
-   agent reads that line and asks the user to run it once.  Subsequent skill
-   invocations go straight to MCP.
+## 历史归档
 
-When Openclaw / Hermes MCP clients catch up on 2025-06-18 OAuth auto-discovery,
-Phase 2 can drop the bootstrap on those platforms without breaking PAT
-storage — the server side (`a2hmarket-concierge` MCP endpoint + findu-user
-`agent_api_token`) stays unchanged.
+本仓库的 bash 脚本、跨平台 config 分发、CloudFront CDN 分发方案保留在 git log 作为设计参考。如果未来有类似“跨平台 skill 脚本一键分发”的需求，可以从 `62daa68` commit 开始翻。
 
-## Why xemaya (and not keman-ai)
+- **v2 exec plan**：`aws_codebase/agent_tasks/exec-plans/2026-04-24-skill-mcp-v2-local.md`
+- **v1 exec plan（已 superseded）**：`aws_codebase/agent_tasks/exec-plans/2026-04-24-skill-mcp-channel.md`
 
-Product shape is still in flux (Claude Code today, Openclaw/Hermes next,
-possibly Cursor/others later).  We incubate in `xemaya/` for ~2 weeks, and
-once Phase 1 ships and a second platform is integrated, transfer the repo
-via `gh repo transfer xemaya/a2h-lite-skill keman-ai/a2h-skill`.  No code
-changes required.
+## AWS 基础设施
 
-## Layout
+v1 建的 S3 bucket `a2h-skill-public` + CloudFront `E2O2CRWYCXOXTZ` + `skill.a2hmarket.ai` + IAM role `github-a2h-skill-deploy` 保留备用（月成本 < $1）。
 
-```
-a2h-lite-skill/
-├── README.md                       # this file
-├── SKILL.md                        # generic skill spec (load this in any agent)
-├── SKILL.claude-code.md            # Claude Code-specific notes
-├── SKILL.openclaw.md               # Openclaw-specific notes (beta placeholder)
-├── SKILL.hermes.md                 # Hermes-specific notes (beta placeholder)
-├── .mcp.json.template              # manual fallback for advanced users
-├── scripts/
-│   ├── bootstrap.sh                # core entrypoint (device flow + write MCP config)
-│   ├── detect-platform.sh          # returns claude-code | openclaw | hermes | unknown
-│   ├── write-mcp-config.sh         # check / write MCP server entry (jq-merge, idempotent)
-│   └── test-connection.sh          # GET /mcp/health with the stored PAT
-├── platforms/
-│   ├── claude-code.conf
-│   ├── openclaw.conf               # TODO: beta-user calibration
-│   └── hermes.conf                 # TODO: beta-user calibration
-└── .github/workflows/
-    └── deploy-skill-scripts.yml    # push main → S3 + CloudFront invalidation
-```
-
-## Try it locally (without real backend)
-
-```bash
-# syntax only
-bash -n scripts/bootstrap.sh
-bash -n scripts/detect-platform.sh
-bash -n scripts/write-mcp-config.sh
-
-# detect the current platform
-bash scripts/detect-platform.sh
-
-# exercise write-mcp-config against /tmp (won't touch your real ~/.claude.json)
-mkdir -p /tmp/a2h-test
-MCP_CONFIG_PATH=/tmp/a2h-test/fake-claude.json \
-  bash -c 'source platforms/claude-code.conf;
-           MCP_CONFIG_PATH=/tmp/a2h-test/fake-claude.json;
-           echo "{\"mcpServers\":{}}" > $MCP_CONFIG_PATH;
-           bash scripts/write-mcp-config.sh write claude-code a2h_pat_test_abc'
-cat /tmp/a2h-test/fake-claude.json
-
-# bootstrap against a non-existent API (fails fast, does not hang)
-A2H_API_BASE="http://localhost:12345" timeout 10 bash scripts/bootstrap.sh
-```
-
-## Contributing — adding a new agent platform
-
-1. Add a new `platforms/<name>.conf` with `MCP_CONFIG_PATH`, `MCP_SERVER_NAME`,
-   `MCP_URL`, `RESTART_CMD`.
-2. Add a detection branch in `scripts/detect-platform.sh`
-   (environment variable or config path signature).
-3. Copy `SKILL.claude-code.md` to `SKILL.<name>.md` and fill in the platform's
-   specific load path, restart semantics, and troubleshooting entries.
-4. Run `bash -n` on every script, exercise
-   `scripts/write-mcp-config.sh write <name> a2h_pat_test_abc` against a
-   `$TMPDIR` config, and open a PR.
-
-## Dependencies
-
-- `curl` (every modern OS ships this)
-- `bash` (4.x or 5.x)
-- `jq` — optional; `bootstrap.sh` falls back to `python3 -c` if `jq` is absent
-- nothing else — no `pip install`, no `npm install`, no language runtime
-
-## Related
-
-- Design plan: `aws_codebase/agent_tasks/exec-plans/2026-04-24-skill-mcp-channel.md`
-  (internal — Task 10)
-- Backend MCP endpoint: `App/a2hmarket-concierge/...` (internal)
-- PAT issuing / verifying: `App/findu-user/...` (internal)
-
-## License
-
-MIT — see `LICENSE`.
+不要删这些资源。未来做其他 skill 产物 CDN 分发时可以复用。
