@@ -1,0 +1,21 @@
+# Keep scripts/ platforms/ SKILL*.md .github/ as historical artifacts in the
+# repo, but do not ship them inside the npm package.
+src/
+test/
+scripts/
+platforms/
+SKILL.md
+SKILL.claude-code.md
+SKILL.openclaw.md
+SKILL.hermes.md
+.github/
+.mcp.json.template
+tsconfig.json
+vitest.config.ts
+*.tsbuildinfo
+coverage/
+.vitest-cache/
+node_modules/
+.gitignore
+.env*
+.DS_Store

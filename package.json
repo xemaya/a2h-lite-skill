@@ -1,0 +1,46 @@
+{
+  "name": "@a2hmarket/a2h-skill-lite",
+  "version": "0.1.0",
+  "description": "One-command installer for A2H Market AI assistant skill (Claude Code / Openclaw / Hermes)",
+  "type": "module",
+  "bin": {
+    "a2h-skill": "./bin/a2h-skill.js"
+  },
+  "files": [
+    "dist/**",
+    "bin/**",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "undici": "^6.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0",
+    "vitest": "^2.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm run test",
+    "clean": "rm -rf dist"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xemaya/a2h-lite-skill.git"
+  },
+  "keywords": [
+    "mcp",
+    "a2hmarket",
+    "claude-code",
+    "installer",
+    "skill"
+  ],
+  "author": "a2hmarket",
+  "license": "MIT"
+}
