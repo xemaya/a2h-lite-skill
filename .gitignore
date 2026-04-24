@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Node / tooling
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+
+# Local test artifacts
+/tmp/
+*.bak

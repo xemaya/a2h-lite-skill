@@ -1,0 +1,62 @@
+name: deploy-skill-scripts
+
+# Push to main on any change under scripts/ or platforms/ → sync the
+# bootstrap assets to S3 (which CloudFront serves as skill.a2hmarket.ai)
+# and invalidate cached copies.
+#
+# AWS-side infrastructure NOT created by this workflow (to be provisioned
+# once by an operator, then referenced here):
+#   - S3 bucket:              s3://a2h-skill-public     (public read)
+#   - CloudFront distribution serving skill.a2hmarket.ai
+#     → fill secrets.CLOUDFRONT_DIST_ID once created
+#   - IAM role with trust-policy for GitHub OIDC:
+#     arn:aws:iam::050027656530:role/github-a2h-skill-deploy
+#     attached policy: s3:PutObject + s3:DeleteObject on the bucket,
+#     cloudfront:CreateInvalidation on the distribution.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - 'platforms/**'
+      - '.github/workflows/deploy-skill-scripts.yml'
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write   # OIDC
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::050027656530:role/github-a2h-skill-deploy
+          aws-region: us-east-1
+
+      - name: Sync scripts/ to s3://a2h-skill-public/
+        run: |
+          aws s3 sync scripts/ s3://a2h-skill-public/ \
+            --delete \
+            --exclude 'platforms/*' \
+            --content-type 'text/plain; charset=utf-8'
+
+      - name: Sync platforms/ to s3://a2h-skill-public/platforms/
+        run: |
+          aws s3 sync platforms/ s3://a2h-skill-public/platforms/ \
+            --delete \
+            --content-type 'text/plain; charset=utf-8'
+
+      - name: CloudFront invalidation
+        env:
+          DIST: ${{ secrets.CLOUDFRONT_DIST_ID }}  # TODO: fill after distribution is created
+        run: |
+          if [ -z "$DIST" ]; then
+            echo "::warning::secrets.CLOUDFRONT_DIST_ID not set — skipping invalidation"
+            exit 0
+          fi
+          aws cloudfront create-invalidation --distribution-id "$DIST" --paths '/*'

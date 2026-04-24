@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "a2h": {
+      "transport": "sse",
+      "url": "https://api.a2hmarket.ai/a2hmarket-concierge/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer a2h_pat_REPLACE_ME"
+      }
+    }
+  }
+}
